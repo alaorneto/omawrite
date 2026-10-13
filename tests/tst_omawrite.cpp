@@ -86,6 +86,106 @@ private slots:
         QSettings().remove(QStringLiteral("editor/font"));
     }
 
+    void restoresEditorZoom_data() {
+        QTest::addColumn<bool>("persist");
+        QTest::addColumn<QVariant>("saved");
+        QTest::addColumn<qreal>("expected");
+        QTest::newRow("absent") << true << QVariant() << qreal(20);
+        QTest::newRow("empty") << true << QVariant(QString()) << qreal(20);
+        QTest::newRow("invalid") << true << QVariant(QStringLiteral("invalid")) << qreal(20);
+        QTest::newRow("below-range") << true << QVariant(7) << qreal(20);
+        QTest::newRow("above-range") << true << QVariant(73) << qreal(20);
+        QTest::newRow("fractional") << true << QVariant(25.5) << qreal(25.5);
+        QTest::newRow("disabled") << false << QVariant(32) << qreal(20);
+    }
+
+    void restoresEditorZoom() {
+        QFETCH(bool, persist);
+        QFETCH(QVariant, saved);
+        QFETCH(qreal, expected);
+        QSettings settings;
+        settings.setValue(QStringLiteral("editor/persistZoom"), persist);
+        if (saved.isValid())
+            settings.setValue(QStringLiteral("editor/zoom"), saved);
+        else
+            settings.remove(QStringLiteral("editor/zoom"));
+        QCOMPARE(Backend().editorZoom(), expected);
+        settings.remove(QStringLiteral("editor/persistZoom"));
+        settings.remove(QStringLiteral("editor/zoom"));
+    }
+
+    void persistsZoomOnlyWhenEnabled() {
+        QSettings settings;
+        const QString persistKey = QStringLiteral("editor/persistZoom");
+        const QString zoomKey = QStringLiteral("editor/zoom");
+        {
+            Backend backend;
+            backend.setEditorZoom(24);
+            QVERIFY(!QSettings().contains(zoomKey));
+        }
+        settings.setValue(persistKey, true);
+        {
+            Backend backend;
+            backend.setEditorZoom(25.5);
+            QCOMPARE(QSettings().value(zoomKey).toDouble(), 25.5);
+            backend.setEditorZoom(32);
+            QCOMPARE(QSettings().value(zoomKey).toDouble(), 32.0);
+        }
+        QCOMPARE(Backend().editorZoom(), 32.0);
+        settings.setValue(persistKey, false);
+        {
+            Backend backend;
+            backend.setEditorZoom(40);
+            QCOMPARE(QSettings().value(zoomKey).toDouble(), 32.0);
+        }
+        QCOMPARE(Backend().editorZoom(), 20.0);
+        settings.remove(persistKey);
+        settings.remove(zoomKey);
+    }
+
+    void scalesMarginsWithZoom_data() {
+        QTest::addColumn<bool>("enabled");
+        QTest::newRow("proportional") << true;
+        QTest::newRow("fixed") << false;
+    }
+
+    void scalesMarginsWithZoom() {
+        QFETCH(bool, enabled);
+        QSettings settings;
+        const QString key = QStringLiteral("editor/scaleMarginsWithZoom");
+        settings.setValue(key, enabled);
+        {
+            Backend backend;
+            QQmlEngine engine;
+            engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+            QQmlComponent component(&engine, QUrl::fromLocalFile(QFINDTESTDATA("../src/Main.qml")));
+            QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+            QScopedPointer<QObject> root(component.create());
+            QVERIFY2(root, qPrintable(component.errorString()));
+            auto *window = qobject_cast<QQuickWindow *>(root.data());
+            QVERIFY(window);
+            QVERIFY(QTest::qWaitForWindowExposed(window));
+            window->setWidth(1280);
+            QCoreApplication::processEvents();
+            auto *editor = window->findChild<QQuickItem *>(QStringLiteral("sourceEditor"));
+            QVERIFY(editor);
+            const qreal left = editor->mapToScene(QPointF()).x();
+            const int footerHeight = window->property("footerHeight").toInt();
+            backend.setEditorZoom(22);
+            QCoreApplication::processEvents();
+            QVERIFY(qAbs(editor->mapToScene(QPointF()).x() - left * (enabled ? 1.1 : 1)) <= 1);
+            QCOMPARE(window->property("footerHeight").toInt(), footerHeight);
+            backend.setEditorZoom(72);
+            window->setWidth(720);
+            QCoreApplication::processEvents();
+            QVERIFY(editor->width() >= 360);
+            QVERIFY(editor->mapToScene(QPointF()).x() >= 0);
+            QVERIFY(editor->mapToScene(QPointF(editor->width(), 0)).x() <= window->width());
+        }
+        settings.remove(key);
+        settings.remove(QStringLiteral("window"));
+    }
+
     void findsInlineMarkdownRanges() {
         const auto markup = MarkdownHighlighter::inlineMarkup(
             QStringLiteral("**bold** and *italic* and [site](https://example.com)"));

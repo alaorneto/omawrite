@@ -31,6 +31,8 @@ class Backend : public QObject {
     Q_PROPERTY(QString themeSelection READ themeSelection NOTIFY themeColorsChanged)
     Q_PROPERTY(QString editorFont READ editorFont WRITE setEditorFont NOTIFY editorFontChanged)
     Q_PROPERTY(QStringList availableFonts READ availableFonts CONSTANT)
+    Q_PROPERTY(qreal editorZoom READ editorZoom WRITE setEditorZoom NOTIFY editorZoomChanged)
+    Q_PROPERTY(bool scaleMarginsWithZoom READ scaleMarginsWithZoom CONSTANT)
 
 public:
     explicit Backend(QObject *parent = nullptr);
@@ -57,6 +59,9 @@ public:
     QStringList availableFonts() const;
     static QString defaultEditorFont();
     static QStringList selectableFontFamilies(const QStringList &families);
+    qreal editorZoom() const { return m_editorZoom; }
+    void setEditorZoom(qreal zoom);
+    bool scaleMarginsWithZoom() const { return m_scaleMarginsWithZoom; }
     static int countWords(const QString &text);
     static QString normalizedLinkUrl(const QString &clipboardText);
     static QString suggestedFileName(const QString &text);
@@ -93,6 +98,7 @@ signals:
     void textScaleChanged();
     void themeColorsChanged();
     void editorFontChanged();
+    void editorZoomChanged();
     void closeAfterSave();
     void openDialogRequested();
     void saveDialogRequested(const QUrl &suggestedUrl);
@@ -150,5 +156,8 @@ private:
     QString m_themeAccent;
     QString m_themeSelection;
     QString m_editorFont;
+    qreal m_editorZoom = 20;
+    bool m_persistZoom = false;
+    bool m_scaleMarginsWithZoom = true;
     QFileSystemWatcher m_themeWatcher;
 };

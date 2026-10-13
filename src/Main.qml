@@ -25,12 +25,17 @@ ApplicationWindow {
     // `omarchy display text size` drives) anchored so its 12px default leaves
     // the app at the sizes it was designed around.
     readonly property real textScale: backend.textScale
-    property real editorFontSize: 20
+    readonly property real editorFontSize: backend.editorZoom
     readonly property int editorFontPixelSize: scaledSize(editorFontSize)
     readonly property int footerHeight: scaledSize(32)
-    readonly property int editorWidth: Math.min(
-        Math.round(writerFontMetrics.averageCharacterWidth * 65),
-        Math.max(360, width - Math.round(writerFontMetrics.averageCharacterWidth * 20)))
+    readonly property real defaultEditorWidth: Math.min(
+        Math.round(defaultWriterFontMetrics.averageCharacterWidth * 65),
+        Math.max(360, width - Math.round(defaultWriterFontMetrics.averageCharacterWidth * 20)))
+    readonly property real editorSideMargin: Math.min(
+        Math.max(0, (width - 360) / 2),
+        Math.max(0, (width - defaultEditorWidth) / 2)
+            * (backend.scaleMarginsWithZoom ? editorFontSize / 20 : 1))
+    readonly property int editorWidth: Math.round(width - 2 * editorSideMargin)
     property bool closeConfirmed: false
     property bool searchOpen: false
     property bool searchUpdating: false
@@ -77,9 +82,9 @@ ApplicationWindow {
     }
 
     FontMetrics {
-        id: writerFontMetrics
+        id: defaultWriterFontMetrics
         font.family: backend.editorFont
-        font.pixelSize: win.editorFontPixelSize
+        font.pixelSize: win.scaledSize(20)
     }
 
     // Every hardcoded size in the interface is expressed at text scale 1.
@@ -90,7 +95,7 @@ ApplicationWindow {
     // Input-independent zoom: one step is 2px before desktop text scaling.
     function adjustZoom(steps) {
         wheelScroll.stop();
-        editorFontSize = Math.max(8, Math.min(72, editorFontSize + steps * 2));
+        backend.editorZoom = editorFontSize + steps * 2;
     }
 
     function toggleFullScreen() {
@@ -350,8 +355,8 @@ ApplicationWindow {
         Flickable {
             id: editorFlick
             anchors.fill: parent
-            anchors.leftMargin: 24
-            anchors.rightMargin: 24
+            anchors.leftMargin: win.editorSideMargin
+            anchors.rightMargin: win.editorSideMargin
             // Inset the scrolling area by the footer strip at both ends, so
             // scrolled text never runs under the footer buttons, status, or
             // word count, and stops just as far short of the top edge.

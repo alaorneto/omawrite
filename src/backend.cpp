@@ -37,6 +37,7 @@
 constexpr qreal typoraLineHeightPercent = 140;
 const QString lastSaveDirectorySetting = QStringLiteral("file/lastSaveDirectory");
 const QString editorFontSetting = QStringLiteral("editor/font");
+const QString editorZoomSetting = QStringLiteral("editor/zoom");
 
 // Noto ships a separate family per script, which buries every other font in
 // the picker. Offer only the core Latin families; the rest still serve as
@@ -92,7 +93,17 @@ QString Backend::normalizedLinkUrl(const QString &clipboardText) {
 }
 
 Backend::Backend(QObject *parent) : QObject(parent) {
-    const QString savedFont = QSettings().value(editorFontSetting).toString();
+    QSettings settings;
+    m_persistZoom = settings.value(QStringLiteral("editor/persistZoom"), false).toBool();
+    m_scaleMarginsWithZoom = settings.value(
+        QStringLiteral("editor/scaleMarginsWithZoom"), true).toBool();
+    if (m_persistZoom) {
+        bool valid = false;
+        const qreal savedZoom = settings.value(editorZoomSetting).toDouble(&valid);
+        if (valid && qIsFinite(savedZoom) && savedZoom >= 8 && savedZoom <= 72)
+            m_editorZoom = savedZoom;
+    }
+    const QString savedFont = settings.value(editorFontSetting).toString();
     m_editorFont = !savedFont.isEmpty() && QFontDatabase::hasFamily(savedFont)
         ? savedFont
         : defaultEditorFont();
@@ -458,6 +469,22 @@ void Backend::setEditorFont(const QString &family) {
     m_editorFont = family;
     QSettings().setValue(editorFontSetting, family);
     emit editorFontChanged();
+}
+
+void Backend::setEditorZoom(qreal zoom) {
+    if (!qIsFinite(zoom))
+        return;
+    zoom = std::clamp(zoom, qreal(8), qreal(72));
+    if (m_editorZoom == zoom)
+        return;
+
+    m_editorZoom = zoom;
+    if (m_persistZoom) {
+        QSettings settings;
+        settings.setValue(editorZoomSetting, zoom);
+        settings.sync();
+    }
+    emit editorZoomChanged();
 }
 
 QStringList Backend::availableFonts() const {

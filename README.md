@@ -37,8 +37,34 @@ Omawrite at the size it is designed around; larger and smaller sizes scale from 
 
 Ctrl+scroll adjusts only the writing area, leaving interface controls and the desktop
 text size unchanged. Each wheel notch changes the font by 2px before desktop scaling,
-within an 8–72px range. The adjustment applies to the current window; new windows
-start at the default size. Scrolling without Ctrl still scrolls the document.
+within an 8–72px range. By default, new windows start at 20px; zoom persistence can
+be enabled in the configuration below. Scrolling without Ctrl still scrolls the document.
+
+## Configuration
+
+Omawrite stores preferences in `$XDG_CONFIG_HOME/Omacom/omawrite.conf`, falling back
+to `~/.config/Omacom/omawrite.conf` when `XDG_CONFIG_HOME` is unset. Edit the file
+while Omawrite is closed; these options are read when each window starts.
+Add the keys to an existing `[editor]` section if present, preserving other preferences.
+
+```ini
+[editor]
+persistZoom=false
+zoom=
+scaleMarginsWithZoom=true
+```
+
+- `persistZoom`: set to `true` to restore the saved zoom in new windows and future
+  sessions. Each zoom change writes `zoom` to disk immediately. The default is
+  `false`: saved zoom is ignored, and zoom changes do not overwrite it.
+- `zoom`: writing font size in pixels before desktop text scaling, from 8 to 72;
+  fractional values are supported. Missing, empty, invalid, or out-of-range values
+  use the 20px default.
+- `scaleMarginsWithZoom`: defaults to `true`. Both side margins grow or shrink
+  proportionally to zoom, keeping the writing area centered. Margins are capped
+  to leave at least 360px for the editor when the window allows it. Set to `false`
+  to keep the side margins independent of zoom; resizing the window, changing the
+  font, or changing desktop text scaling can still change the layout.
 
 ## Requirements
 
