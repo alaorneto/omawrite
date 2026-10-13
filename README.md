@@ -22,6 +22,7 @@ Install via the Omarchy Package Repository via the `omawrite` package. It's inst
 - `Ctrl+F` searches the document. Use `Enter` or `Ctrl+G` for the next match and `Shift+Enter` for the previous match.
 - `Ctrl+H` opens find and replace.
 - `Ctrl+B`, `Ctrl+I`, and `Ctrl+K` insert bold, italic, and link Markdown.
+- `Ctrl+Mouse wheel` increases the writing font size when scrolling up and decreases it when scrolling down.
 - `Ctrl+?` shows the keyboard shortcut reference.
 
 Unsaved drafts are recovered after an abnormal exit. Omawrite also watches open files
@@ -33,6 +34,11 @@ and Omawrite remembers the choice. IBM Plex Mono is the default.
 Text follows the desktop text size — `omarchy display text size`, or GNOME's
 `text-scaling-factor` — and re-flows without a restart. The default of 12px leaves
 Omawrite at the size it is designed around; larger and smaller sizes scale from there.
+
+Ctrl+scroll adjusts only the writing area, leaving interface controls and the desktop
+text size unchanged. Each wheel notch changes the font by 2px before desktop scaling,
+within an 8–72px range. The adjustment applies to the current window; new windows
+start at the default size. Scrolling without Ctrl still scrolls the document.
 
 ## Requirements
 

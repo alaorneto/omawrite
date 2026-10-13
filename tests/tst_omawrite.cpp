@@ -4,6 +4,9 @@
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickStyle>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QWheelEvent>
 
 #include "backend.h"
 #include "markdownhighlighter.h"
@@ -255,6 +258,104 @@ private slots:
         backend.setTextScale(9.0 / 12.0);
         QCOMPARE(window->property("editorFontPixelSize").toInt(), 15);
         QCOMPARE(editor->property("font").value<QFont>().pixelSize(), 15);
+    }
+
+    void resizesEditorFontWithControlWheel() {
+        const QString mainQmlPath = QFINDTESTDATA("../src/Main.qml");
+        QVERIFY(!mainQmlPath.isEmpty());
+
+        Backend backend;
+        QQmlEngine engine;
+        engine.rootContext()->setContextProperty(QStringLiteral("backend"), &backend);
+        QQmlComponent component(&engine, QUrl::fromLocalFile(mainQmlPath));
+        QVERIFY2(component.isReady(), qPrintable(component.errorString()));
+        QScopedPointer<QObject> root(component.create());
+        QVERIFY2(root, qPrintable(component.errorString()));
+        auto *window = qobject_cast<QQuickWindow *>(root.data());
+        QVERIFY(window);
+        QVERIFY(QTest::qWaitForWindowExposed(window));
+
+        auto *editor = window->findChild<QQuickItem *>(QStringLiteral("sourceEditor"));
+        QVERIFY(editor);
+        QQuickItem *flick = editor->parentItem()->parentItem();
+        const QString text = QStringLiteral("A line of Markdown text.\n").repeated(200);
+        editor->setProperty("text", text);
+        QVERIFY(QMetaObject::invokeMethod(editor, "select",
+                                         Q_ARG(int, 2), Q_ARG(int, 9)));
+        const int cursor = editor->property("cursorPosition").toInt();
+        const bool modified = backend.modified();
+        const int footerHeight = window->property("footerHeight").toInt();
+        const auto fontSize = [editor] {
+            return editor->property("font").value<QFont>().pixelSize();
+        };
+        const auto wheel = [window, flick](QPoint angle, QPoint pixels = {},
+                                          Qt::KeyboardModifiers modifiers = Qt::ControlModifier) {
+            const QPointF position = flick->mapToScene(
+                QPointF(flick->width() / 2, flick->height() / 2));
+            QWheelEvent event(position, window->mapToGlobal(position), pixels, angle,
+                              Qt::NoButton, modifiers, Qt::NoScrollPhase, false);
+            QCoreApplication::sendEvent(window, &event);
+        };
+
+        const int initialSize = fontSize();
+        wheel(QPoint(0, 120));
+        QCOMPARE(fontSize(), initialSize + 2);
+        wheel(QPoint(0, -120));
+        QCOMPARE(fontSize(), initialSize);
+        // Fractional notches accumulate rather than being discarded.
+        wheel(QPoint(0, 30));
+        wheel(QPoint(0, 30));
+        QCOMPARE(fontSize(), initialSize + 1);
+        wheel(QPoint(0, -60));
+        QCOMPARE(fontSize(), initialSize);
+        // Pixel-precise touchpad events use the same zoom path.
+        wheel({}, QPoint(0, 60));
+        QCOMPARE(fontSize(), initialSize + 2);
+        wheel({}, QPoint(0, -60));
+        QCOMPARE(fontSize(), initialSize);
+        wheel(QPoint(120, 0));
+        wheel({});
+        QCOMPARE(fontSize(), initialSize);
+        QTest::qWait(250);
+        QCOMPARE(flick->property("contentY").toReal(), 0.0);
+        QCOMPARE(window->property("footerHeight").toInt(), footerHeight);
+        QCOMPARE(editor->property("text").toString(), text);
+        QCOMPARE(editor->property("cursorPosition").toInt(), cursor);
+        QCOMPARE(editor->property("selectionStart").toInt(), 2);
+        QCOMPARE(editor->property("selectionEnd").toInt(), 9);
+        QCOMPARE(backend.modified(), modified);
+
+        wheel(QPoint(0, -120), {}, Qt::NoModifier);
+        QTRY_VERIFY(flick->property("contentY").toReal() > 0);
+        QCOMPARE(fontSize(), initialSize);
+        // Switching to zoom cancels a still-running scroll animation.
+        wheel(QPoint(0, 120));
+        const qreal zoomContentY = flick->property("contentY").toReal();
+        QTest::qWait(250);
+        QCOMPARE(flick->property("contentY").toReal(), zoomContentY);
+
+        wheel(QPoint(0, 120 * 100));
+        QCOMPARE(fontSize(), 72);
+        wheel(QPoint(0, 120));
+        QCOMPARE(fontSize(), 72);
+        wheel(QPoint(0, -120 * 100));
+        QCOMPARE(fontSize(), 8);
+        wheel(QPoint(0, -120));
+        QCOMPARE(fontSize(), 8);
+        wheel(QPoint(0, 120));
+        QCOMPARE(fontSize(), 10);
+        backend.setTextScale(1.5);
+        QCOMPARE(fontSize(), 15);
+        wheel(QPoint(0, 120));
+        QCOMPARE(fontSize(), 18);
+
+        // Other input methods can adjust zoom without constructing wheel events.
+        QVERIFY(QMetaObject::invokeMethod(window, "adjustZoom",
+                                         Q_ARG(QVariant, QVariant(1.0))));
+        QCOMPARE(fontSize(), 21);
+        QVERIFY(QMetaObject::invokeMethod(window, "adjustZoom",
+                                         Q_ARG(QVariant, QVariant(-1.0))));
+        QCOMPARE(fontSize(), 18);
     }
 
     void remembersLastSaveDirectory() {

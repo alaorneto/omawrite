@@ -25,7 +25,8 @@ ApplicationWindow {
     // `omarchy display text size` drives) anchored so its 12px default leaves
     // the app at the sizes it was designed around.
     readonly property real textScale: backend.textScale
-    readonly property int editorFontPixelSize: scaledSize(20)
+    property real editorFontSize: 20
+    readonly property int editorFontPixelSize: scaledSize(editorFontSize)
     readonly property int footerHeight: scaledSize(32)
     readonly property int editorWidth: Math.min(
         Math.round(writerFontMetrics.averageCharacterWidth * 65),
@@ -84,6 +85,12 @@ ApplicationWindow {
     // Every hardcoded size in the interface is expressed at text scale 1.
     function scaledSize(pixels) {
         return Math.max(1, Math.round(pixels * win.textScale));
+    }
+
+    // Input-independent zoom: one step is 2px before desktop text scaling.
+    function adjustZoom(steps) {
+        wheelScroll.stop();
+        editorFontSize = Math.max(8, Math.min(72, editorFontSize + steps * 2));
     }
 
     function toggleFullScreen() {
@@ -332,7 +339,7 @@ ApplicationWindow {
         standardButtons: Dialog.Close
         anchors.centerIn: parent
         contentItem: Label {
-            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
+            text: "Ctrl+S  Save\nCtrl+Shift+S  Save As\nCtrl+O  Open\nCtrl+N  New Window\nCtrl+F  Find\nCtrl+H  Find and Replace\nCtrl+B  Bold\nCtrl+I  Italic\nCtrl+K  Link\nCtrl+Mouse wheel  Adjust writing font size\nCtrl+P  Print\nF11 / Super+F  Fullscreen\nCtrl+?  Shortcuts"
             lineHeight: 1.5
         }
     }
@@ -462,7 +469,17 @@ ApplicationWindow {
                 // wheel notches arrive with only angleDelta set, while
                 // finger scrolling carries pixel-precise pixelDelta.
                 acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                acceptedModifiers: Qt.KeyboardModifierMask
                 onWheel: function(wheel) {
+                    if (wheel.modifiers & Qt.ControlModifier) {
+                        // Keep fractional notches; pixel-only touchpad events
+                        // use 60px per step.
+                        var steps = wheel.angleDelta.y !== 0
+                            ? wheel.angleDelta.y / 120 : wheel.pixelDelta.y / 60;
+                        win.adjustZoom(steps);
+                        wheel.accepted = true;
+                        return;
+                    }
                     scrollLinger.restart();
                     if (wheel.pixelDelta.y !== 0)
                         editorFlick.scrollTo(editorFlick.clampContentY(editorFlick.contentY - wheel.pixelDelta.y));
